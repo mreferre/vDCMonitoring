@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<!--
+        (Powered by the <a href="http://raphaeljs.com/">Raphaël</a>
+        JavaScript SVG library)<br/>
+
+--!>  
+
+
+<html lang="en">
+
+<head>
+  <title>vCHS Virtual Data Center Monitoring</title>
+
+  <meta charset="utf-8">
+  <link rel="stylesheet" type="text/css" href="css/demo.css" media="screen">
+  <script src="js/jquery-2.1.0.min.js"></script> 
+  <script src="js/jquery.csv-0.71.js"></script>
+  <script type="text/javascript" src="js/raphael-min.js"></script>
+  <script type="text/javascript" src="js/raphael_linechart.js"></script>
+
+  <script type="text/javascript">
+  
+  	// This is where we call the script by choosing the CSV file  
+    // When we select the files we call the handleFileSelect function
+    
+    window.onload = function(){
+    $('#files').bind('change', handleFileSelect);
+ 
+    
+      // This is where we set all data to 0 
+      // Data will be populated later on in the script 
+    
+      var cpumax = 0;
+      var memmax = 0;
+      
+      
+      var fileinput = [];
+
+      var w = 1600;
+      var h1 = Raphael('chart1', w, 250);
+      var h2 = Raphael('chart2', w, 250);
+      var h3 = Raphael('chart3', w, 250);
+
+	  var VMCount = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}	   
+			
+	  var vDCCPUAllocated = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}		
+		
+	  var vDCCPUReserved = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}		
+		
+	  var cpuTotal = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}		
+			  
+	  var vDCMEMAllocated = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}		
+					
+	  var vDCMEMReserved = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}	
+						
+      var memTotal = {
+		labels: [0],
+		data: [0],
+		lines1: [0],
+		lines2: [0]
+		}	
+
+  // This handles the file 
+  // and eventually calls the function that populates the data above (draw[]) 
+  
+  function handleFileSelect(evt) {
+    var files = evt.target.files; // FileList object
+    fileinput = files[0];
+	console.log(fileinput);
+    draw(fileinput);
+
+    // post the results
+    $('#list').html(output);
+   }
+  
+  
+   
+  function draw(file) {
+    var reader = new FileReader();
+    reader.readAsText(file);
+    console.log(file);
+    
+    
+    // we put the content of the file into the CSV variable
+    // we then convert the CSV content into an Array (matrixdata)
+    // matrixdata is a multidimensional array 
+             
+    reader.onload = function(event){
+      var csv = event.target.result;
+      var matrixdata = $.csv.toArrays(csv);
+  
+ 
+    // here we load, in each of the variables, a column of the multidimensional array
+    // this way the data for the charts get populated
+    // refer to the Ruby script to see how we structure the SCSV file
+    // hint: #Timestamp, vDCCPUAllocated, vDCMEMAllocated, vDCCPUReserved, vDCMEMReserved, CPUTotal, MEMTotal
+    
+    // we start with CPU 
+        
+      vDCCPUAllocated.data = getcolumn(matrixdata,1);
+      vDCCPUReserved.data = getcolumn(matrixdata,3);
+      cpuTotal.data = getcolumn(matrixdata,5);
+
+    // this finds out what the max value for all CPU lines is and assign it to the very first column
+    // this is needed so that all lines has the same maximum on the "y" axes so the lines are scaled properly 
+    // unfortunately the Raphael LineChart library doesn't seem to have this support natively (draw n lines with the same scale) 
+    // so we had to artificially create it by assigning the same max level as data 0 for all lines 
+      
+      cpumax = Math.max(cpuTotal.data[0],vDCCPUAllocated.data[0], vDCCPUReserved.data[0]);
+      cpuTotal.data[0] = cpumax;
+      vDCCPUAllocated.data[0] = cpumax; 
+      vDCCPUReserved.data[0] = cpumax;
+
+
+    // we then do Memory 
+
+      vDCMEMAllocated.data = getcolumn(matrixdata,2);
+      vDCMEMReserved.data = getcolumn(matrixdata,4);
+      memTotal.data = getcolumn(matrixdata,6);
+
+      memmax = Math.max(memTotal.data[0],vDCMEMAllocated.data[0], vDCMEMReserved.data[0]);
+      memTotal.data[0] = memmax;
+      vDCMEMAllocated.data[0] = memmax; 
+      vDCMEMReserved.data[0] = memmax;
+
+    // we also extract how many VMs we have in the virtual data center at any point in time 
+
+	  VMCount.data = getcolumn(matrixdata,7)
+	  VMCount.lines1 = getcolumn(matrixdata,7)
+
+	// here we populate the labels of each graph
+	// the timestamp is always the "x" axes for all the 6 lines and here we set it for each of them
+	
+      
+      timestamp = getcolumn (matrixdata,0);
+      cpuTotal.labels = timestamp;
+      vDCCPUAllocated.labels = timestamp;
+      vDCCPUReserved.labels = timestamp;
+      memTotal.labels = timestamp;
+      vDCMEMAllocated.labels = timestamp;
+      vDCMEMReserved.labels = timestamp;
+      VMCount.labels = timestamp;
+ 	  
+ 	  // This actually draws the lines in both graphs
+ 	  // H1 is CPU 
+ 	  // H2 is Memory 
+ 	  // each graph has data for the resource Allocated + Reserved + Consumed  
+
+
+	h1.clear();
+	h2.clear();
+	h3.clear();
+
+
+
+      h1.lineChart({
+        data: vDCCPUAllocated,
+        width: w,
+        no_dot: true,        
+        show_area: false,
+        mouse_coords: 'rect',
+        x_labels_step: 0,
+        y_labels_count: 5,
+        colors: {
+          master: '#d90000'
+        }
+      });      
+  
+      h1.lineChart({
+        data: vDCCPUReserved,
+        width: w,
+        no_dot: true,        
+        show_area: true,
+        mouse_coords: 'rect',
+        x_labels_step: 0,
+        y_labels_count: 5,
+        colors: {
+          master: '#989898'
+        }
+      });
+           
+      h1.lineChart({
+        data: cpuTotal,
+        width: w,
+    	data_index: 3,
+        no_dot: true,        
+        show_area: true,
+        mouse_coords: 'rect',
+        x_labels_step: 10,
+        y_labels_count: 5,
+        colors: {
+          master: '#01A8F0'
+        }
+      });
+                   
+      h2.lineChart({
+        data: vDCMEMAllocated,
+        width: w,
+        no_dot: true,        
+        show_area: false,
+        mouse_coords: 'rect',
+        x_labels_step: 0,
+        y_labels_count: 5,
+        colors: {
+          master: '#d90000'
+        }
+      });
+      
+      h2.lineChart({
+        data: vDCMEMReserved,
+        width: w,
+        no_dot: true,        
+        show_area: true,
+        mouse_coords: 'rect',
+        x_labels_step: 0,
+        y_labels_count: 5,
+        colors: {
+          master: '#989898'
+        }
+      });
+
+      h2.lineChart({
+        data: memTotal,
+        width: w,
+        no_dot: true,        
+        show_area: true,
+        mouse_coords: 'rect',
+        x_labels_step: 10,
+        y_labels_count: 5,
+        colors: {
+          master: '#01A8F0'
+        }
+      });
+      
+      
+      h3.lineChart({
+        data: VMCount,
+        width: w,
+        no_dot: false,        
+        show_area: false,
+        mouse_coords: 'rect',
+        x_labels_step: 10,
+        y_labels_count: 5,
+        colors: {
+           master: '#01AF45'
+        }
+      });
+      
+      }; 
+      
+    reader.onerror = function(){ alert('Unable to read ' + file.fileName); };
+    }
+  
+  
+  // This function creates the array that represents a column in the CSV file
+  // In addition it also finds and set the maximum value to the first location in the array 
+  // (this is needed for drawing graphs properly - see above)  
+    
+  function getcolumn(matrix,column) {
+       array = new Array();
+       var max =0;
+       for(var i =0 ; i<matrix.length; i++) {
+         array[i] = matrix[i][column];
+         if (array[i] > max) max=array[i];
+        }
+         console.log(column,max);
+        array[0] = max;
+  return array;
+
+ 
+   }
+    
+  reload = function() {
+        console.log("reload button pushed");
+    	console.log(fileinput);
+    	draw(fileinput);
+    	}
+    	
+  } // End of Window.Load Scripting
+  
+  
+  // This function reloads the file without having to re-open it
+  // Use case: update the graph from a file that keeps getting populated 
+
+ 
+  </script>
+  
+</head>
+<body>
+
+  <div id="main">
+
+    <div>
+
+      <h1>vCHS Virtual Data Center Monitoring</h1>
+
+  		<font color="red"><b>Allocated -------</b></font> 
+		<font color="grey"><b>Reserved -------</b></font> 
+		<font color="blue"><b>Consumed -------</b></font>
+		<font color="green"><b>VM Count -------</b></font>
+
+		<p/>
+      <br/>
+
+    </div>
+    
+    		
+	<div id=inputs class=clearfix>
+  		<input type=file id=files name=[] multiple />
+   	</div>
+   	
+    
+   	<div id=reload class=clearfix>
+  		<input type=button onclick="reload()" id=reload value="Reload" name=[] multiple />
+   	</div>
+   	
+   	<p/>
+
+	
+	<h3><a name="features">Virtual Data Center CPU Monitoring</a></h3>
+
+    <div class="box">
+      <div class="inner">
+        <div id="chart1"></div>
+       </div>
+    </div>
+
+    <div>
+
+    </div>
+
+
+	<h3><a name="features">Virtual Data Center Memory Monitoring</a></h3>
+
+
+    <div class="box">
+      <div class="inner">
+        <div id="chart2"></div>
+      </div>
+    </div>
+
+
+	<h3><a name="features">Virtual Machines Count per Virtual Data Center</a></h3>
+
+    <div class="box">
+      <div class="inner">
+        <div id="chart3"></div>
+      </div>
+    </div>
+
+	
+	<output id=list>
+	</output>
+
+
+
+  </div>
+
+
+
+</body>
+</html>
